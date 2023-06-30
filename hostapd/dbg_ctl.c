@@ -68,7 +68,7 @@ int pmkid_lost_list_dump2buf(char *buf, int buf_len)
     return ret;
 }
 
-void pmkid_lost_list_check(u8 *mac_addr)
+int pmkid_lost_list_check(u8 *mac_addr)
 {
     int ret = 0;
     dbg_ctl_sta_t *p = NULL;
@@ -132,15 +132,10 @@ static int dbg_ctl_pmkid_lost_op(char *value)
     return 0;
 }
 
-static void dbg_ctl_pmkid_lost_dump(void)
-{
-    return;
-}
-
 int dbg_ctl_run(char *cmd, char *buf, size_t buflen)
 {
 	char *pos, *end, *value;
-	int ret;
+	int ret = 0;
 
 	/* cmd: DBG_CTL [CMD] [<val>]" */
 	if (*cmd == '\0') {
