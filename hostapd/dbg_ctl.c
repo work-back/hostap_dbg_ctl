@@ -132,9 +132,60 @@ static int dbg_ctl_pmkid_lost_op(char *value)
     return 0;
 }
 
+typedef int (*dbg_ctl_cmd_set_cb_t)(char *value);
+typedef int (*dbg_ctl_cmd_get_cb_t)(char *buf, int buf_len);
+
+typedef struct dbg_ctl_cmd_info {
+    const char *name;
+    dbg_ctl_cmd_set_cb_t set;
+    dbg_ctl_cmd_get_cb_t get;
+}dbg_ctl_cmd_it;
+
+int dbg_ctl_cmd_skip_wpa_set(char *value)
+{
+    skip_wpa_auth_test = atoi(value);
+
+    return 0;
+}
+
+int dbg_ctl_cmd_skip_wpa_get(char *buf, int buf_len)
+{
+    return os_snprintf(buf, buf_len, "[%s] => [%d]\n", "skip_wpa", skip_wpa_auth_test);
+}
+
+int dbg_ctl_cmd_pmkid_lost_set(char *value)
+{
+    dbg_ctl_pmkid_lost_op(value);
+
+    return 0;
+}
+
+int dbg_ctl_cmd_pmkid_lost_get(char *buf, int buf_len)
+{
+    return pmkid_lost_list_dump2buf(buf, buf_len);
+}
+
+static dbg_ctl_cmd_it cmd_list[] = {
+   {"skip_wpa",   dbg_ctl_cmd_skip_wpa_set, dbg_ctl_cmd_skip_wpa_get},
+   {"pmkid_lost", dbg_ctl_cmd_pmkid_lost_set, dbg_ctl_cmd_pmkid_lost_get},
+};
+
+static dbg_ctl_cmd_it* dbg_ctl_get_cmd(const char *cmd)
+{
+    int i = 0;
+
+    for (i = 0; i < ARRAY_SIZE(cmd_list); i++) {
+        if (!os_strncmp(cmd, cmd_list[i].name, os_strlen(cmd) + 1)) {
+            return &(cmd_list[i]);
+        }
+    }
+
+    return NULL;
+}
+
 int dbg_ctl_run(char *cmd, char *buf, size_t buflen)
 {
-	char *pos, *end, *value;
+	char *value = NULL;
 	int ret = 0;
 
 	/* cmd: DBG_CTL [CMD] [<val>]" */
@@ -154,43 +205,32 @@ int dbg_ctl_run(char *cmd, char *buf, size_t buflen)
 			value++;
 		}
 	}
-	/* value: [<val>]" */
+
+    if (!os_strlen(cmd)) {
+        return os_snprintf(buf, buflen, "Error: %s\n", "cmd is NULL.");
+    }
 
     wpa_printf(MSG_ERROR, "cmd ====> [%s]", cmd);
 
-    if (os_strlen(cmd)) {
-        if (os_strncmp(cmd, "skip_wpa", 8) == 0) {
-            wpa_printf(MSG_ERROR, "run ====> skip_wpa");
-            if (value && os_strlen(value)) {
-                skip_wpa_auth_test = atoi(value);
-            } else {
-                pos = buf;
-                end = buf + buflen;
-                ret = os_snprintf(pos, end - pos, "[%s] => [%d]\n", "skip_wpa", skip_wpa_auth_test);
-                if (os_snprintf_error(end - pos, ret))
-                    ret = 0;
+    dbg_ctl_cmd_it *cmd_it = NULL;
+    cmd_it = dbg_ctl_get_cmd(cmd);
+    if (!cmd_it) {
+        return os_snprintf(buf, buflen, "Error: cmd %s is not support.\n", cmd);
+    }
 
-                return ret;
-            }
-        } else if (os_strncmp(cmd, "pmkid_lost", 10) == 0) {
-            wpa_printf(MSG_ERROR, "run ====> pmkid_lost");
-            if (value && os_strlen(value)) {
-                dbg_ctl_pmkid_lost_op(value);
+	/* value: [<val>]" */
+
+    if (value && os_strlen(value)) {
+        if (cmd_it->set) {
+            if (cmd_it->set(value)) {
+                return os_snprintf(buf, buflen, "Error: run cmd %s set failed.\n", cmd);
             } else {
-                pos = buf;
-                end = buf + buflen;
-                ret = pmkid_lost_list_dump2buf(pos, end - pos);
-                if (os_snprintf_error(end - pos, ret))
-                    ret = 0;
-                return ret;
+                return os_snprintf(buf, buflen, "%s", "OK\n");
             }
-        } else {
-            pos = buf;
-            end = buf + buflen;
-            ret = os_snprintf(pos, end - pos, "Unknown dbg_ctl cmd: [%s]", cmd);
-            if (os_snprintf_error(end - pos, ret))
-                ret = 0;
-            return ret;
+        }
+    } else {
+        if (cmd_it->get) {
+            return cmd_it->get(buf, buflen);
         }
     }
 
