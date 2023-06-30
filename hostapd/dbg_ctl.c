@@ -57,11 +57,9 @@ int pmkid_lost_list_dump2buf(char *buf, int buf_len)
     int ret = 0;
     dbg_ctl_sta_t *p = NULL;
 
-    wpa_printf(MSG_ERROR, "%s", "pmkid lost sta list"); 
     ret += os_snprintf(buf + ret, buf_len - ret, "%s", "pmkid lost sta list:\n"); 
 
     dl_list_for_each(p, &pmkid_lost_list, dbg_ctl_sta_t, node) {
-        wpa_printf(MSG_ERROR, L_MAC_FMT, L_MAC2STR(p->mac_addr));
         ret += os_snprintf(buf + ret, buf_len - ret, L_MAC_FMT"\n", L_MAC2STR(p->mac_addr)); 
     }
 
@@ -90,8 +88,6 @@ static int dbg_ctl_pmkid_lost_op(char *value)
     char *op = value;
     char *mac = NULL;
 
-    wpa_printf(MSG_ERROR, "op buf ====> [%s]", value);
-    
     /* value: [OP MAC]" */
     mac = os_strchr(op, ' ');
 	if (mac) {
@@ -119,8 +115,6 @@ static int dbg_ctl_pmkid_lost_op(char *value)
 
         m2[0] = (u8)m[0]; m2[1] = (u8)m[1]; m2[2] = (u8)m[2];
         m2[3] = (u8)m[3]; m2[4] = (u8)m[4]; m2[5] = (u8)m[5];
-
-        wpa_printf(MSG_ERROR, "%s ====> "L_MAC_FMT, op, L_MAC2STR(m2));
 
         if (!os_strncmp(op, "ADD", 3)) {
             pmkid_lost_list_add(m2);
@@ -186,11 +180,10 @@ static dbg_ctl_cmd_it* dbg_ctl_get_cmd(const char *cmd)
 int dbg_ctl_run(char *cmd, char *buf, size_t buflen)
 {
 	char *value = NULL;
-	int ret = 0;
 
 	/* cmd: DBG_CTL [CMD] [<val>]" */
 	if (*cmd == '\0') {
-		return ret;
+        return os_snprintf(buf, buflen, "Error: %s\n", "cmd is NULL.");
 	}
 
     wpa_printf(MSG_ERROR, "cmd buf @ [%s]", cmd);
@@ -209,8 +202,6 @@ int dbg_ctl_run(char *cmd, char *buf, size_t buflen)
     if (!os_strlen(cmd)) {
         return os_snprintf(buf, buflen, "Error: %s\n", "cmd is NULL.");
     }
-
-    wpa_printf(MSG_ERROR, "cmd ====> [%s]", cmd);
 
     dbg_ctl_cmd_it *cmd_it = NULL;
     cmd_it = dbg_ctl_get_cmd(cmd);

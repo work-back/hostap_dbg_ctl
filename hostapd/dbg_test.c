@@ -12,7 +12,35 @@ int main(void)
     dbg_ctl_run(cmd, buf, sizeof(buf));
     wpa_printf(MSG_ERROR, "RESP ====> %s", buf);
 
+    snprintf(cmd, sizeof(cmd), "%s", "pmkid_lost ADD 11:22:33:44:55:77");
+    dbg_ctl_run(cmd, buf, sizeof(buf));
+    wpa_printf(MSG_ERROR, "RESP ====> %s", buf);
+
     snprintf(cmd, sizeof(cmd), "%s", "pmkid_lost");
+    dbg_ctl_run(cmd, buf, sizeof(buf));
+    wpa_printf(MSG_ERROR, "RESP ====> %s", buf);
+
+    snprintf(cmd, sizeof(cmd), "%s", "pmkid_lost DEL 11:22:33:44:55:66");
+    dbg_ctl_run(cmd, buf, sizeof(buf));
+    wpa_printf(MSG_ERROR, "RESP ====> %s", buf);
+
+    snprintf(cmd, sizeof(cmd), "%s", "pmkid_lost");
+    dbg_ctl_run(cmd, buf, sizeof(buf));
+    wpa_printf(MSG_ERROR, "RESP ====> %s", buf);
+
+    snprintf(cmd, sizeof(cmd), "%s", "");
+    dbg_ctl_run(cmd, buf, sizeof(buf));
+    wpa_printf(MSG_ERROR, "RESP ====> %s", buf);
+
+    snprintf(cmd, sizeof(cmd), "%s", "fku");
+    dbg_ctl_run(cmd, buf, sizeof(buf));
+    wpa_printf(MSG_ERROR, "RESP ====> %s", buf);
+
+    snprintf(cmd, sizeof(cmd), "%s", "skip_wpa 1");
+    dbg_ctl_run(cmd, buf, sizeof(buf));
+    wpa_printf(MSG_ERROR, "RESP ====> %s", buf);
+
+    snprintf(cmd, sizeof(cmd), "%s", "skip_wpa");
     dbg_ctl_run(cmd, buf, sizeof(buf));
     wpa_printf(MSG_ERROR, "RESP ====> %s", buf);
 
