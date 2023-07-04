@@ -2,7 +2,7 @@
 
 struct dl_list pmkid_lost_list;
 
-#define STA_FLAG_PMKID_LOST (1 << 0);
+#define STA_FLAG_PMKID_LOST (1 << 0)
 
 typedef struct dbg_ctl_sta {
     struct dl_list node;
@@ -24,6 +24,7 @@ static void sta_list_add(u8 *mac_addr, u32 f)
 
     dl_list_for_each(p, &pmkid_lost_list, dbg_ctl_sta_t, node) {
         if (!compare_ether_addr(mac_addr, p->mac_addr)) {
+            p->flags |= f;
             goto exit_add;
         }
     }
@@ -34,11 +35,11 @@ static void sta_list_add(u8 *mac_addr, u32 f)
     }
     memset(n, 0, sizeof(dbg_ctl_sta_t));
     memcpy(n->mac_addr, mac_addr, ETH_ALEN);
+    n->flags |= f;
 
     dl_list_add(&pmkid_lost_list, &(n->node));
 
 exit_add:
-    p->flags |= f; 
 
     return;
 }
@@ -91,9 +92,7 @@ static int sta_list_check(u8 *mac_addr, u32 f)
 
 int pmkid_lost_list_check(u8 *mac_addr)
 {
-    sta_list_check();
-
-    return ret;
+    return sta_list_check(mac_addr, STA_FLAG_PMKID_LOST);
 }
 
 typedef int (*dbg_ctl_cmd_set_cb_t)(void *it, char *value);
@@ -241,7 +240,7 @@ int dbg_ctl_run(char *cmd, char *buf, size_t buflen)
 
     if (value && os_strlen(value)) {
         if (cmd_it->set) {
-            if (cmd_it->set(cmt_it, value)) {
+            if (cmd_it->set(cmd_it, value)) {
                 return os_snprintf(buf, buflen, "Error: run cmd %s set failed.\n", cmd);
             } else {
                 return os_snprintf(buf, buflen, "%s", "OK\n");
@@ -249,7 +248,7 @@ int dbg_ctl_run(char *cmd, char *buf, size_t buflen)
         }
     } else {
         if (cmd_it->get) {
-            return cmd_it->get(cmt_it, buf, buflen);
+            return cmd_it->get(cmd_it, buf, buflen);
         }
     }
 
