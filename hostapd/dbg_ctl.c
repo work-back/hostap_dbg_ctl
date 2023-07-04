@@ -3,6 +3,7 @@
 struct dl_list pmkid_lost_list;
 
 #define STA_FLAG_PMKID_LOST (1 << 0)
+#define STA_FLAG_EAPOL_DROP (1 << 1)
 
 typedef struct dbg_ctl_sta {
     struct dl_list node;
@@ -157,7 +158,7 @@ int dbg_ctl_list_dump2buf(dbg_ctl_cmd_it *it, char *buf, int buf_len)
 
     ret += os_snprintf(buf + ret, buf_len - ret, "%s sta list:\n", it->name); 
 
-    sta_list_dump2buf(buf + ret, buf_len - ret, it->flag);
+    ret += sta_list_dump2buf(buf + ret, buf_len - ret, it->flag);
 
     return ret;
 }
@@ -176,9 +177,7 @@ int dbg_ctl_cmd_skip_wpa_get(void *it, char *buf, int buf_len)
 
 int dbg_ctl_cmd_sta_set(void *it, char *value)
 {
-    dbg_ctl_sta_op(it, value);
-
-    return 0;
+    return dbg_ctl_sta_op(it, value);
 }
 
 int dbg_ctl_cmd_sta_get(void *it, char *buf, int buf_len)
@@ -189,6 +188,7 @@ int dbg_ctl_cmd_sta_get(void *it, char *buf, int buf_len)
 static dbg_ctl_cmd_it cmd_list[] = {
    {"skip_wpa",   dbg_ctl_cmd_skip_wpa_set, dbg_ctl_cmd_skip_wpa_get, 0},
    {"pmkid_lost", dbg_ctl_cmd_sta_set, dbg_ctl_cmd_sta_get, STA_FLAG_PMKID_LOST},
+   {"eapol_drop", dbg_ctl_cmd_sta_set, dbg_ctl_cmd_sta_get, STA_FLAG_EAPOL_DROP},
 };
 
 static dbg_ctl_cmd_it* dbg_ctl_get_cmd(const char *cmd)
