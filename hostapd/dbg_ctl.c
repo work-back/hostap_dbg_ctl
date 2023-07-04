@@ -2,9 +2,12 @@
 
 struct dl_list pmkid_lost_list;
 
+#define STA_FLAG_PMKID_LOST (1 << 0);
+
 typedef struct dbg_ctl_sta {
     struct dl_list node;
     u8 mac_addr[ETH_ALEN]; 
+    u32 flags;
 } dbg_ctl_sta_t;
 
 static int compare_ether_addr(const u8 *addr1, const u8 *addr2)
@@ -15,8 +18,7 @@ static int compare_ether_addr(const u8 *addr1, const u8 *addr2)
 	return ((a[0] ^ b[0]) | (a[1] ^ b[1]) | (a[2] ^ b[2])) != 0;
 }
 
-
-void pmkid_lost_list_add(u8 *mac_addr)
+static void sta_list_add(u8 *mac_addr, u32 f)
 {
     dbg_ctl_sta_t *p = NULL, *n = NULL;
 
@@ -30,21 +32,27 @@ void pmkid_lost_list_add(u8 *mac_addr)
     if (!n) {
         goto exit_add;
     }
+    memset(n, 0, sizeof(dbg_ctl_sta_t));
     memcpy(n->mac_addr, mac_addr, ETH_ALEN);
 
     dl_list_add(&pmkid_lost_list, &(n->node));
 
 exit_add:
+    p->flags |= f; 
+
     return;
 }
 
-void pmkid_lost_list_del(u8 *mac_addr)
+static void sta_list_del(u8 *mac_addr, u32 f)
 {
     dbg_ctl_sta_t *p = NULL, *n = NULL;
 
     dl_list_for_each_safe(p, n, &pmkid_lost_list, dbg_ctl_sta_t, node) {
         if (!compare_ether_addr(mac_addr, p->mac_addr)) {
-            dl_list_del(&(p->node));
+            p->flags &= ~f;
+            if (p->flags == 0x0) {
+                dl_list_del(&(p->node));
+            }
             break;
         }
     }
@@ -52,27 +60,27 @@ void pmkid_lost_list_del(u8 *mac_addr)
     return;
 }
 
-int pmkid_lost_list_dump2buf(char *buf, int buf_len)
+static int sta_list_dump2buf(char *buf, int buf_len, u32 f)
 {
     int ret = 0;
     dbg_ctl_sta_t *p = NULL;
 
-    ret += os_snprintf(buf + ret, buf_len - ret, "%s", "pmkid lost sta list:\n"); 
-
     dl_list_for_each(p, &pmkid_lost_list, dbg_ctl_sta_t, node) {
-        ret += os_snprintf(buf + ret, buf_len - ret, L_MAC_FMT"\n", L_MAC2STR(p->mac_addr)); 
+        if (p->flags & f) {
+            ret += os_snprintf(buf + ret, buf_len - ret, L_MAC_FMT"\n", L_MAC2STR(p->mac_addr)); 
+        }
     }
 
     return ret;
 }
 
-int pmkid_lost_list_check(u8 *mac_addr)
+static int sta_list_check(u8 *mac_addr, u32 f)
 {
     int ret = 0;
     dbg_ctl_sta_t *p = NULL;
 
     dl_list_for_each(p, &pmkid_lost_list, dbg_ctl_sta_t, node) {
-        if (!compare_ether_addr(mac_addr, p->mac_addr)) {
+        if (!compare_ether_addr(mac_addr, p->mac_addr) && (p->flags & f)) {
             ret = 1;
             break;
         }
@@ -81,9 +89,27 @@ int pmkid_lost_list_check(u8 *mac_addr)
     return ret;
 }
 
+int pmkid_lost_list_check(u8 *mac_addr)
+{
+    sta_list_check();
+
+    return ret;
+}
+
+typedef int (*dbg_ctl_cmd_set_cb_t)(void *it, char *value);
+typedef int (*dbg_ctl_cmd_get_cb_t)(void *it, char *buf, int buf_len);
+
+typedef struct dbg_ctl_cmd_info {
+    const char *name;
+    dbg_ctl_cmd_set_cb_t set;
+    dbg_ctl_cmd_get_cb_t get;
+    u32 flag;
+}dbg_ctl_cmd_it;
+
+
 int skip_wpa_auth_test = 0;
 
-static int dbg_ctl_pmkid_lost_op(char *value)
+static int dbg_ctl_sta_op(dbg_ctl_cmd_it *it, char *value)
 {
     char *op = value;
     char *mac = NULL;
@@ -117,51 +143,53 @@ static int dbg_ctl_pmkid_lost_op(char *value)
         m2[3] = (u8)m[3]; m2[4] = (u8)m[4]; m2[5] = (u8)m[5];
 
         if (!os_strncmp(op, "ADD", 3)) {
-            pmkid_lost_list_add(m2);
+            sta_list_add(m2, it->flag);
         } else if (!os_strncmp(op, "DEL", 3)) {
-            pmkid_lost_list_del(m2);
+            sta_list_del(m2, it->flag);
         }
     } while(0);
 
     return 0;
 }
 
-typedef int (*dbg_ctl_cmd_set_cb_t)(char *value);
-typedef int (*dbg_ctl_cmd_get_cb_t)(char *buf, int buf_len);
+int dbg_ctl_list_dump2buf(dbg_ctl_cmd_it *it, char *buf, int buf_len)
+{
+    int ret = 0;
 
-typedef struct dbg_ctl_cmd_info {
-    const char *name;
-    dbg_ctl_cmd_set_cb_t set;
-    dbg_ctl_cmd_get_cb_t get;
-}dbg_ctl_cmd_it;
+    ret += os_snprintf(buf + ret, buf_len - ret, "%s sta list:\n", it->name); 
 
-int dbg_ctl_cmd_skip_wpa_set(char *value)
+    sta_list_dump2buf(buf + ret, buf_len - ret, it->flag);
+
+    return ret;
+}
+
+int dbg_ctl_cmd_skip_wpa_set(void *it, char *value)
 {
     skip_wpa_auth_test = atoi(value);
 
     return 0;
 }
 
-int dbg_ctl_cmd_skip_wpa_get(char *buf, int buf_len)
+int dbg_ctl_cmd_skip_wpa_get(void *it, char *buf, int buf_len)
 {
     return os_snprintf(buf, buf_len, "[%s] => [%d]\n", "skip_wpa", skip_wpa_auth_test);
 }
 
-int dbg_ctl_cmd_pmkid_lost_set(char *value)
+int dbg_ctl_cmd_sta_set(void *it, char *value)
 {
-    dbg_ctl_pmkid_lost_op(value);
+    dbg_ctl_sta_op(it, value);
 
     return 0;
 }
 
-int dbg_ctl_cmd_pmkid_lost_get(char *buf, int buf_len)
+int dbg_ctl_cmd_sta_get(void *it, char *buf, int buf_len)
 {
-    return pmkid_lost_list_dump2buf(buf, buf_len);
+    return dbg_ctl_list_dump2buf(it, buf, buf_len);
 }
 
 static dbg_ctl_cmd_it cmd_list[] = {
-   {"skip_wpa",   dbg_ctl_cmd_skip_wpa_set, dbg_ctl_cmd_skip_wpa_get},
-   {"pmkid_lost", dbg_ctl_cmd_pmkid_lost_set, dbg_ctl_cmd_pmkid_lost_get},
+   {"skip_wpa",   dbg_ctl_cmd_skip_wpa_set, dbg_ctl_cmd_skip_wpa_get, 0},
+   {"pmkid_lost", dbg_ctl_cmd_sta_set, dbg_ctl_cmd_sta_get, STA_FLAG_PMKID_LOST},
 };
 
 static dbg_ctl_cmd_it* dbg_ctl_get_cmd(const char *cmd)
@@ -213,7 +241,7 @@ int dbg_ctl_run(char *cmd, char *buf, size_t buflen)
 
     if (value && os_strlen(value)) {
         if (cmd_it->set) {
-            if (cmd_it->set(value)) {
+            if (cmd_it->set(cmt_it, value)) {
                 return os_snprintf(buf, buflen, "Error: run cmd %s set failed.\n", cmd);
             } else {
                 return os_snprintf(buf, buflen, "%s", "OK\n");
@@ -221,7 +249,7 @@ int dbg_ctl_run(char *cmd, char *buf, size_t buflen)
         }
     } else {
         if (cmd_it->get) {
-            return cmd_it->get(buf, buflen);
+            return cmd_it->get(cmt_it, buf, buflen);
         }
     }
 
