@@ -1059,6 +1059,29 @@ static bool wpa_auth_gtk_rekey_in_process(struct wpa_authenticator *wpa_auth)
 	return false;
 }
 
+#include <execinfo.h>
+void my_backtrace(void)
+{
+    int j, nptrs;
+    void *buffer[100];
+    char **strings;
+
+    nptrs = backtrace(buffer, 128);
+    wpa_printf(MSG_ERROR, "LYJ:backtrace() returned %d addresses\n", nptrs);
+
+    strings = backtrace_symbols(buffer, nptrs);
+    if (strings == NULL) {
+        wpa_printf(MSG_ERROR, "LYJ:no backtrace_symbols");
+        return;
+    }
+
+    for (j = 0; j < nptrs; j++)
+	    wpa_printf(MSG_ERROR, "LYJ:%s\n", strings[j]);
+
+    free(strings);
+}
+
+int eapol2_drop_check(u8 *mac_addr);
 
 void wpa_receive(struct wpa_authenticator *wpa_auth,
 		 struct wpa_state_machine *sm,
@@ -1073,6 +1096,8 @@ void wpa_receive(struct wpa_authenticator *wpa_auth,
 	const u8 *key_data;
 	size_t keyhdrlen, mic_len;
 	u8 *mic;
+
+    my_backtrace();
 
 	if (!wpa_auth || !wpa_auth->conf.wpa || !sm)
 		return;
@@ -1160,6 +1185,16 @@ void wpa_receive(struct wpa_authenticator *wpa_auth,
 		msg = PAIRWISE_2;
 		msgtxt = "2/4 Pairwise";
 	}
+
+    wpa_printf(MSG_ERROR, "[%s][%d]LYJ ====> msg:[%s] from "MACSTR,
+            __func__, __LINE__, msgtxt, MAC2STR(sm->addr));
+    if (msg == PAIRWISE_2) {
+        if (eapol2_drop_check(sm->addr)) {
+            wpa_printf(MSG_ERROR, "[%s][%d]LYJ ====> DROP msg:[%s] from "MACSTR,
+                    __func__, __LINE__, msgtxt, MAC2STR(sm->addr));
+            return;
+        }
+    }
 
 	if (msg == REQUEST || msg == PAIRWISE_2 || msg == PAIRWISE_4 ||
 	    msg == GROUP_2) {
