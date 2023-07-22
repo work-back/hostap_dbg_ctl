@@ -5,6 +5,7 @@ struct dl_list pmkid_lost_list;
 #define STA_FLAG_PMKID_LOST   (1 << 0)
 #define STA_FLAG_EAPOL_DROP   (1 << 1)
 #define STA_FLAG_EAPOL_2_DROP (1 << 2)
+#define STA_FLAG_ASSOC_REQ_DROP (1 << 3)
 
 typedef struct dbg_ctl_sta {
     struct dl_list node;
@@ -102,6 +103,11 @@ int eapol2_drop_check(u8 *mac_addr)
     return sta_list_check(mac_addr, STA_FLAG_EAPOL_2_DROP);
 }
 
+int assoc_req_drop_check(u8 *mac_addr)
+{
+    return sta_list_check(mac_addr, STA_FLAG_ASSOC_REQ_DROP);
+}
+
 typedef int (*dbg_ctl_cmd_set_cb_t)(void *it, char *value);
 typedef int (*dbg_ctl_cmd_get_cb_t)(void *it, char *buf, int buf_len);
 
@@ -196,6 +202,7 @@ static dbg_ctl_cmd_it cmd_list[] = {
    {"pmkid_lost",  dbg_ctl_cmd_sta_set, dbg_ctl_cmd_sta_get, STA_FLAG_PMKID_LOST},
    {"eapol_drop",  dbg_ctl_cmd_sta_set, dbg_ctl_cmd_sta_get, STA_FLAG_EAPOL_DROP},
    {"eapol2_drop", dbg_ctl_cmd_sta_set, dbg_ctl_cmd_sta_get, STA_FLAG_EAPOL_2_DROP},
+   {"assoc_req_drop", dbg_ctl_cmd_sta_set, dbg_ctl_cmd_sta_get, STA_FLAG_ASSOC_REQ_DROP},
 };
 
 static dbg_ctl_cmd_it* dbg_ctl_get_cmd(const char *cmd)

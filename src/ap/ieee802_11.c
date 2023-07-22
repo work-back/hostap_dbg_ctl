@@ -4709,6 +4709,8 @@ void fils_hlp_timeout(void *eloop_ctx, void *eloop_data)
 
 #endif /* CONFIG_FILS */
 
+int assoc_req_drop_check(u8 *mac_addr);
+
 static void handle_assoc(struct hostapd_data *hapd,
 			 const struct ieee80211_mgmt *mgmt, size_t len,
 			 int reassoc, int rssi)
@@ -4725,7 +4727,7 @@ static void handle_assoc(struct hostapd_data *hapd,
 #endif /* CONFIG_FILS */
 	int omit_rsnxe = 0;
 
-    wpa_printf(MSG_ERROR, "recv [%s] from ["MACSTR"]",
+    wpa_printf(MSG_ERROR, "LYJ ====> recv [%s] from ["MACSTR"]",
             reassoc ? "reassoc" : "assoc", MAC2STR(mgmt->sa));
 
 	if (len < IEEE80211_HDRLEN + (reassoc ? sizeof(mgmt->u.reassoc_req) :
@@ -4734,6 +4736,12 @@ static void handle_assoc(struct hostapd_data *hapd,
 			   reassoc, (unsigned long) len);
 		return;
 	}
+
+    if (assoc_req_drop_check(mgmt->sa)) {
+        wpa_printf(MSG_ERROR, "LYJ ====> DROP [%s] from ["MACSTR"]",
+                reassoc ? "reassoc" : "assoc", MAC2STR(mgmt->sa));
+        return;
+    }
 
 #ifdef CONFIG_TESTING_OPTIONS
 	if (reassoc) {
