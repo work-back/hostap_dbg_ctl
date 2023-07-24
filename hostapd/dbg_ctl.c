@@ -9,8 +9,9 @@ struct dl_list pmkid_lost_list;
 
 typedef struct dbg_ctl_sta {
     struct dl_list node;
-    u8 mac_addr[ETH_ALEN]; 
+    u8 mac_addr[ETH_ALEN];
     u32 flags;
+    int tmp_cnt;
 } dbg_ctl_sta_t;
 
 static int compare_ether_addr(const u8 *addr1, const u8 *addr2)
@@ -21,13 +22,18 @@ static int compare_ether_addr(const u8 *addr1, const u8 *addr2)
 	return ((a[0] ^ b[0]) | (a[1] ^ b[1]) | (a[2] ^ b[2])) != 0;
 }
 
-static void sta_list_add(u8 *mac_addr, u32 f)
+static void sta_list_add(u8 *mac_addr, u32 f, int cnt)
 {
     dbg_ctl_sta_t *p = NULL, *n = NULL;
+
+    if (cnt == 0) {
+        return;
+    }
 
     dl_list_for_each(p, &pmkid_lost_list, dbg_ctl_sta_t, node) {
         if (!compare_ether_addr(mac_addr, p->mac_addr)) {
             p->flags |= f;
+            p->tmp_cnt = cnt;
             goto exit_add;
         }
     }
@@ -52,10 +58,12 @@ static void sta_list_del(u8 *mac_addr, u32 f)
     dbg_ctl_sta_t *p = NULL, *n = NULL;
 
     dl_list_for_each_safe(p, n, &pmkid_lost_list, dbg_ctl_sta_t, node) {
-        if (!compare_ether_addr(mac_addr, p->mac_addr)) {
+        if ((!compare_ether_addr(mac_addr, p->mac_addr)) || (!mac_addr)) {
             p->flags &= ~f;
             if (p->flags == 0x0) {
                 dl_list_del(&(p->node));
+                free(p);
+                p = NULL;
             }
             break;
         }
@@ -71,7 +79,8 @@ static int sta_list_dump2buf(char *buf, int buf_len, u32 f)
 
     dl_list_for_each(p, &pmkid_lost_list, dbg_ctl_sta_t, node) {
         if (p->flags & f) {
-            ret += os_snprintf(buf + ret, buf_len - ret, L_MAC_FMT"\n", L_MAC2STR(p->mac_addr)); 
+            ret += os_snprintf(buf + ret, buf_len - ret, L_MAC_FMT" [%d]\n",
+                    L_MAC2STR(p->mac_addr), p->tmp_cnt);
         }
     }
 
@@ -81,10 +90,19 @@ static int sta_list_dump2buf(char *buf, int buf_len, u32 f)
 static int sta_list_check(u8 *mac_addr, u32 f)
 {
     int ret = 0;
-    dbg_ctl_sta_t *p = NULL;
+    dbg_ctl_sta_t *p = NULL, *n = NULL;
 
-    dl_list_for_each(p, &pmkid_lost_list, dbg_ctl_sta_t, node) {
+    dl_list_for_each_safe(p, n, &pmkid_lost_list, dbg_ctl_sta_t, node) {
         if (!compare_ether_addr(mac_addr, p->mac_addr) && (p->flags & f)) {
+            wpa_printf(MSG_ERROR, L_MAC_FMT" [%d]", L_MAC2STR(p->mac_addr), p->tmp_cnt);
+            if (p->tmp_cnt > 0) {
+                p->tmp_cnt--;
+                if (p->tmp_cnt == 0) {
+                    wpa_printf(MSG_ERROR, "CHECK DEL "L_MAC_FMT, L_MAC2STR(p->mac_addr), p->tmp_cnt);
+                    dl_list_del(&(p->node));
+                    p = NULL;
+                }
+            }
             ret = 1;
             break;
         }
@@ -125,6 +143,8 @@ static int dbg_ctl_sta_op(dbg_ctl_cmd_it *it, char *value)
 {
     char *op = value;
     char *mac = NULL;
+    char *cnt_s = NULL;
+    int cnt = 0;
 
     /* value: [OP MAC]" */
     mac = os_strchr(op, ' ');
@@ -135,10 +155,34 @@ static int dbg_ctl_sta_op(dbg_ctl_cmd_it *it, char *value)
 		}
 	}
 
-    wpa_printf(MSG_ERROR, "op: [%s], mac:[%s]", op, mac);
+    wpa_printf(MSG_ERROR, "op: [%s], mac:[%s]", op, mac[0] ? mac : "empty");
+
+    if (!os_strncmp(op, "CRL", 3)) {
+        sta_list_del(NULL, it->flag);
+    }
 
     if (!mac || !os_strlen(mac)) {
         return -1;
+    }
+
+    /* value: [TMP MAC 4]" */
+    if (!os_strncmp(op, "TMP", 3)) {
+        cnt_s = os_strchr(mac, ' ');
+        if (cnt_s) {
+            *cnt_s++ = '\0';
+            while (*cnt_s == ' ') {
+                cnt_s++;
+            }
+        }
+        if (!cnt_s || !os_strlen(cnt_s)) {
+            return -1;
+        }
+
+        cnt = atoi(cnt_s);
+        if (cnt <= 0) {
+            return -1;
+        }
+        wpa_printf(MSG_ERROR, "op: [%s], mac:[%s], cnt:[%d]", op, mac[0] ? mac : "empty", cnt);
     }
 
     do {
@@ -155,9 +199,11 @@ static int dbg_ctl_sta_op(dbg_ctl_cmd_it *it, char *value)
         m2[3] = (u8)m[3]; m2[4] = (u8)m[4]; m2[5] = (u8)m[5];
 
         if (!os_strncmp(op, "ADD", 3)) {
-            sta_list_add(m2, it->flag);
+            sta_list_add(m2, it->flag, -1);
         } else if (!os_strncmp(op, "DEL", 3)) {
             sta_list_del(m2, it->flag);
+        } else if (!os_strncmp(op, "TMP", 3)) {
+            sta_list_add(m2, it->flag, cnt);
         }
     } while(0);
 
@@ -168,7 +214,7 @@ int dbg_ctl_list_dump2buf(dbg_ctl_cmd_it *it, char *buf, int buf_len)
 {
     int ret = 0;
 
-    ret += os_snprintf(buf + ret, buf_len - ret, "%s sta list:\n", it->name); 
+    ret += os_snprintf(buf + ret, buf_len - ret, "%s sta list:\n", it->name);
 
     ret += sta_list_dump2buf(buf + ret, buf_len - ret, it->flag);
 
