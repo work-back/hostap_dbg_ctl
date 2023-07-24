@@ -45,6 +45,7 @@ static void sta_list_add(u8 *mac_addr, u32 f, int cnt)
     memset(n, 0, sizeof(dbg_ctl_sta_t));
     memcpy(n->mac_addr, mac_addr, ETH_ALEN);
     n->flags |= f;
+    p->tmp_cnt = cnt;
 
     dl_list_add(&pmkid_lost_list, &(n->node));
 
@@ -58,7 +59,7 @@ static void sta_list_del(u8 *mac_addr, u32 f)
     dbg_ctl_sta_t *p = NULL, *n = NULL;
 
     dl_list_for_each_safe(p, n, &pmkid_lost_list, dbg_ctl_sta_t, node) {
-        if ((!compare_ether_addr(mac_addr, p->mac_addr)) || (!mac_addr)) {
+        if (!compare_ether_addr(mac_addr, p->mac_addr)) {
             p->flags &= ~f;
             if (p->flags == 0x0) {
                 dl_list_del(&(p->node));
@@ -66,6 +67,22 @@ static void sta_list_del(u8 *mac_addr, u32 f)
                 p = NULL;
             }
             break;
+        }
+    }
+
+    return;
+}
+
+static void sta_list_del_all_by_f(u32 f)
+{
+    dbg_ctl_sta_t *p = NULL, *n = NULL;
+
+    dl_list_for_each_safe(p, n, &pmkid_lost_list, dbg_ctl_sta_t, node) {
+        p->flags &= ~f;
+        if (p->flags == 0x0) {
+            dl_list_del(&(p->node));
+            free(p);
+            p = NULL;
         }
     }
 
@@ -157,8 +174,9 @@ static int dbg_ctl_sta_op(dbg_ctl_cmd_it *it, char *value)
 
     wpa_printf(MSG_ERROR, "op: [%s], mac:[%s]", op, mac[0] ? mac : "empty");
 
-    if (!os_strncmp(op, "CRL", 3)) {
-        sta_list_del(NULL, it->flag);
+    if (!os_strncmp(op, "CLR", 3)) {
+        sta_list_del_all_by_f(it->flag);
+        return 0;
     }
 
     if (!mac || !os_strlen(mac)) {
