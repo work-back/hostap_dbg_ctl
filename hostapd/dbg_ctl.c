@@ -45,7 +45,9 @@ static void sta_list_add(u8 *mac_addr, u32 f, int cnt)
     memset(n, 0, sizeof(dbg_ctl_sta_t));
     memcpy(n->mac_addr, mac_addr, ETH_ALEN);
     n->flags |= f;
-    p->tmp_cnt = cnt;
+    n->tmp_cnt = cnt;
+
+    wpa_printf(MSG_ERROR, "ADD NEW "L_MAC_FMT" %d", L_MAC2STR(n->mac_addr), n->tmp_cnt);
 
     dl_list_add(&pmkid_lost_list, &(n->node));
 
@@ -172,7 +174,7 @@ static int dbg_ctl_sta_op(dbg_ctl_cmd_it *it, char *value)
 		}
 	}
 
-    wpa_printf(MSG_ERROR, "op: [%s], mac:[%s]", op, mac[0] ? mac : "empty");
+    wpa_printf(MSG_ERROR, "op: [%s], mac:[%s]", op, (mac && mac[0]) ? mac : "empty");
 
     if (!os_strncmp(op, "CLR", 3)) {
         sta_list_del_all_by_f(it->flag);
